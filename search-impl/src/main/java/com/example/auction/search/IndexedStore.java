@@ -13,7 +13,7 @@ import java.util.concurrent.CompletionStage;
  */
 public interface IndexedStore {
 
-    CompletionStage<Done> store(Optional<IndexedItem> document);
+    CompletionStage<Done> store(IndexedItem document);
 
     CompletionStage<SearchResult> search(QueryRoot query);
 }

@@ -5,6 +5,7 @@ import com.example.auction.search.api.SearchItem;
 import com.example.auction.search.api.SearchRequest;
 import com.example.auction.search.api.SearchService;
 import com.example.auction.user.api.UserService;
+import com.lightbend.lagom.javadsl.client.cdi.LagomServiceClient;
 import com.typesafe.config.Config;
 import play.data.Form;
 import play.data.FormFactory;
@@ -15,6 +16,7 @@ import play.mvc.Result;
 import views.html.searchItem;
 import play.Configuration;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -23,6 +25,7 @@ import java.util.concurrent.CompletionStage;
 /**
  *
  */
+@ApplicationScoped
 public class SearchController extends AbstractController {
 
     public static final int DEFAULT_PAGE_SIZE = 15;
@@ -36,9 +39,9 @@ public class SearchController extends AbstractController {
     @Inject
     public SearchController(Config config,
                             MessagesApi messagesApi,
-                            UserService userService,
+                            @LagomServiceClient UserService userService,
                             FormFactory formFactory,
-                            SearchService searchService,
+                            @LagomServiceClient SearchService searchService,
                             HttpExecutionContext ec
     ) {
         super(messagesApi, userService);

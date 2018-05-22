@@ -25,8 +25,6 @@ import static com.lightbend.lagom.javadsl.api.Service.*;
  */
 public interface ItemService extends Service {
 
-    String TOPIC_ID = "item-ItemEvent";
-
     /**
      * Create an item.
      *
@@ -70,13 +68,6 @@ public interface ItemService extends Service {
     ServiceCall<NotUsed, PaginatedSequence<ItemSummary>> getItemsForUser(
             UUID id, ItemStatus status, Optional<Integer> pageNo, Optional<Integer> pageSize);
 
-    /**
-     * The item events stream.
-     */
-    Topic<ItemEvent> itemEvents();
-
-
-
     @Override
     default Descriptor descriptor() {
         return named("item").withCalls(
@@ -85,8 +76,6 @@ public interface ItemService extends Service {
                 pathCall("/api/item/:id", this::getItem),
                 restCall(Method.PUT, "/api/item/:id", this::updateItem),
                 pathCall("/api/item?userId&status&pageNo&pageSize", this::getItemsForUser)
-        ).withTopics(
-                topic(TOPIC_ID, this::itemEvents)
         ).withPathParamSerializer(
                 UUID.class, PathParamSerializers.required("UUID", UUID::fromString, UUID::toString)
         ).withPathParamSerializer(

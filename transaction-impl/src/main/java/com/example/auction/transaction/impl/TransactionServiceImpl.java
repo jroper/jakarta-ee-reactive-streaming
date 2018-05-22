@@ -2,7 +2,6 @@ package com.example.auction.transaction.impl;
 
 import akka.Done;
 import akka.NotUsed;
-import akka.stream.javadsl.Flow;
 import com.example.auction.item.api.Item;
 import com.example.auction.item.api.ItemEvent;
 import com.example.auction.item.api.ItemService;
@@ -12,14 +11,19 @@ import com.example.auction.transaction.impl.TransactionCommand.*;
 import com.lightbend.lagom.javadsl.api.ServiceCall;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRef;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRegistry;
+import com.lightbend.lagom.javadsl.server.cdi.LagomService;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 import static com.example.auction.security.ServerSecurity.authenticated;
 
+@LagomService
+@ApplicationScoped
 public class TransactionServiceImpl implements TransactionService {
 
     private static final Integer DEFAULT_PAGE_SIZE = 10;
@@ -28,26 +32,26 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionRepository transactions;
 
     @Inject
-    public TransactionServiceImpl(PersistentEntityRegistry registry, ItemService itemService, TransactionRepository transactions) {
+    public TransactionServiceImpl(PersistentEntityRegistry registry, TransactionRepository transactions) {
         this.registry = registry;
         this.transactions = transactions;
+    }
 
-        registry.register(TransactionEntity.class);
-        // Subscribe to the events from the item service.
-        itemService.itemEvents().subscribe().atLeastOnce(Flow.<ItemEvent>create().mapAsync(1, itemEvent -> {
-            if (itemEvent instanceof ItemEvent.AuctionFinished) {
-                ItemEvent.AuctionFinished auctionFinished = (ItemEvent.AuctionFinished) itemEvent;
-                // If an auction doesn't have a winner, then we can't start a transaction
-                if (auctionFinished.getItem().getAuctionWinner().isPresent()) {
-                    Item item = auctionFinished.getItem();
-                    Transaction transaction = new Transaction(item.getId(), item.getCreator(),
-                            item.getAuctionWinner().get(), item.getItemData(), item.getPrice());
-                    return entityRef(auctionFinished.getItemId()).ask(new StartTransaction(transaction));
-                } else
-                    return CompletableFuture.completedFuture(Done.getInstance());
-            } else
+    public CompletionStage<?> consumeItemEvents(ItemEvent itemEvent) {
+        if (itemEvent instanceof ItemEvent.AuctionFinished) {
+            ItemEvent.AuctionFinished auctionFinished = (ItemEvent.AuctionFinished) itemEvent;
+            // If an auction doesn't have a winner, then we can't start a transaction
+            if (auctionFinished.getItem().getAuctionWinner().isPresent()) {
+                Item item = auctionFinished.getItem();
+                Transaction transaction = new Transaction(item.getId(), item.getCreator(),
+                    item.getAuctionWinner().get(), item.getItemData(), item.getPrice());
+                return entityRef(auctionFinished.getItemId()).ask(new StartTransaction(transaction));
+            } else {
                 return CompletableFuture.completedFuture(Done.getInstance());
-        }));
+            }
+        } else {
+            return CompletableFuture.completedFuture(Done.getInstance());
+        }
     }
 
     /*@Override
@@ -100,19 +104,19 @@ public class TransactionServiceImpl implements TransactionService {
         return authenticated(userId -> request -> {
             GetTransaction get = new GetTransaction(userId);
             return entityRef(itemId)
-                    .ask(get)
-                    .thenApply(transaction -> {
-                        TransactionInfo transactionInfo = TransactionMappers.toApi((TransactionState) transaction);
-                        return transactionInfo;
-                    });
+                .ask(get)
+                .thenApply(transaction -> {
+                    TransactionInfo transactionInfo = TransactionMappers.toApi((TransactionState) transaction);
+                    return transactionInfo;
+                });
         });
     }
 
     @Override
     public ServiceCall<NotUsed, PaginatedSequence<TransactionSummary>> getTransactionsForUser(
-            TransactionInfoStatus status, Optional<Integer> pageNo, Optional<Integer> pageSize) {
+        TransactionInfoStatus status, Optional<Integer> pageNo, Optional<Integer> pageSize) {
         return authenticated(userId -> request ->
-                transactions.getTransactionsForUser(userId, status, pageNo.orElse(0), pageSize.orElse(DEFAULT_PAGE_SIZE))
+            transactions.getTransactionsForUser(userId, status, pageNo.orElse(0), pageSize.orElse(DEFAULT_PAGE_SIZE))
         );
     }
 

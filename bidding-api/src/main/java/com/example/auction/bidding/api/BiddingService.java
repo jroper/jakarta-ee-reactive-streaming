@@ -29,8 +29,6 @@ import java.util.UUID;
  */
 public interface BiddingService extends Service {
 
-  String TOPIC_ID = "bidding-BidEvent";
-
   /**
    * A place a bid.
    *
@@ -45,18 +43,11 @@ public interface BiddingService extends Service {
    */
   ServiceCall<NotUsed, PSequence<Bid>> getBids(UUID itemId);
 
-  /**
-   * The bid events topic.
-   */
-  Topic<BidEvent> bidEvents();
-
   @Override
   default Descriptor descriptor() {
     return named("bidding").withCalls(
             pathCall("/api/item/:id/bids", this::placeBid),
             pathCall("/api/item/:id/bids", this::getBids)
-    ).withTopics(
-            topic(TOPIC_ID, this::bidEvents)
     ).withPathParamSerializer(UUID.class, PathParamSerializers.required("UUID", UUID::fromString, UUID::toString))
             .withHeaderFilter(SecurityHeaderFilter.INSTANCE);
   }

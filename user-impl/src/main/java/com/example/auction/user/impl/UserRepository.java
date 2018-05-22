@@ -1,8 +1,6 @@
 package com.example.auction.user.impl;
 
 import akka.Done;
-import akka.NotUsed;
-import akka.stream.javadsl.Source;
 import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Row;
@@ -11,15 +9,15 @@ import com.datastax.driver.extras.codecs.jdk8.InstantCodec;
 import com.example.auction.pagination.PaginatedSequence;
 import com.example.auction.user.api.User;
 import com.lightbend.lagom.javadsl.persistence.AggregateEventTag;
-import com.lightbend.lagom.javadsl.persistence.ReadSide;
 import com.lightbend.lagom.javadsl.persistence.ReadSideProcessor;
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide;
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraSession;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 import org.pcollections.PSequence;
 import org.pcollections.TreePVector;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,15 +29,14 @@ import static com.example.core.CompletionStageUtils.accept;
 import static com.example.core.CompletionStageUtils.doAll;
 import static com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide.completedStatements;
 
-@Singleton
+@ApplicationScoped
 public class UserRepository {
 
     private final CassandraSession session;
 
     @Inject
-    public UserRepository(CassandraSession session, ReadSide readSide) {
+    public UserRepository(CassandraSession session) {
         this.session = session;
-        readSide.register(PUserEventProcessor.class);
     }
 
     CompletionStage<PaginatedSequence<User>> getUsers(int page, int pageSize) {
@@ -86,7 +83,8 @@ public class UserRepository {
         );
     }
 
-    private static class PUserEventProcessor extends ReadSideProcessor<PUserEvent> {
+    @PersistenceScoped
+    public static class PUserEventProcessor extends ReadSideProcessor<PUserEvent> {
 
         private final CassandraSession session;
         private final CassandraReadSide readSide;

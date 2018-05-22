@@ -3,6 +3,7 @@ package controllers;
 import com.example.auction.user.api.UserLogin;
 import com.example.auction.user.api.UserRegistration;
 import com.example.auction.user.api.UserService;
+import com.lightbend.lagom.javadsl.client.cdi.LagomServiceClient;
 import play.Configuration;
 import play.data.Form;
 import play.data.FormFactory;
@@ -11,11 +12,13 @@ import play.libs.concurrent.HttpExecutionContext;
 import play.mvc.Http;
 import play.mvc.Result;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+@ApplicationScoped
 public class UserController extends AbstractController {
 
     private final UserService userService;
@@ -24,7 +27,7 @@ public class UserController extends AbstractController {
     private final Boolean showInlineInstruction;
 
     @Inject
-    public UserController(Configuration config, MessagesApi messagesApi, UserService userService, FormFactory formFactory, HttpExecutionContext httpExecutionContext) {
+    public UserController(Configuration config, MessagesApi messagesApi, @LagomServiceClient UserService userService, FormFactory formFactory, HttpExecutionContext httpExecutionContext) {
         super(messagesApi, userService);
         this.userService = userService;
         this.formFactory = formFactory;
@@ -34,9 +37,9 @@ public class UserController extends AbstractController {
 
     public CompletionStage<Result> createUserForm() {
         return withUser(ctx(), userId ->
-                loadNav(userId).thenApplyAsync(nav ->
-                                ok(views.html.createUser.render(showInlineInstruction, formFactory.form(CreateUserForm.class), nav)),
-                        httpExecutionContext.current())
+            loadNav(userId).thenApplyAsync(nav ->
+                    ok(views.html.createUser.render(showInlineInstruction, formFactory.form(CreateUserForm.class), nav)),
+                httpExecutionContext.current())
         );
     }
 
@@ -72,6 +75,7 @@ public class UserController extends AbstractController {
         session("user", userId);
         return ok("User switched");
     }
+
     public CompletionStage<Result> loginUser() {
         Http.Context ctx = ctx();
         return withUser(ctx, userId ->
@@ -91,8 +95,8 @@ public class UserController extends AbstractController {
         );
 
 
-
     }
+
     public CompletionStage<Result> loginUserForm() {
         Http.Context ctx = ctx();
         return withUser(ctx, userId ->

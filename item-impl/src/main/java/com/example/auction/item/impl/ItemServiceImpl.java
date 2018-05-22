@@ -2,29 +2,34 @@ package com.example.auction.item.impl;
 
 import akka.Done;
 import akka.NotUsed;
-import akka.japi.Pair;
-import akka.stream.javadsl.Flow;
 import com.datastax.driver.core.utils.UUIDs;
 import com.example.auction.bidding.api.Bid;
 import com.example.auction.bidding.api.BidEvent;
-import com.example.auction.bidding.api.BiddingService;
 import com.example.auction.item.api.*;
 import com.example.auction.item.api.Item;
 import com.example.auction.item.impl.PItemCommand.*;
 import com.example.auction.pagination.PaginatedSequence;
 import com.lightbend.lagom.javadsl.api.ServiceCall;
-import com.lightbend.lagom.javadsl.api.broker.Topic;
 import com.lightbend.lagom.javadsl.api.deser.ExceptionMessage;
 import com.lightbend.lagom.javadsl.api.transport.Forbidden;
 import com.lightbend.lagom.javadsl.api.transport.NotFound;
 import com.lightbend.lagom.javadsl.api.transport.TransportErrorCode;
 import com.lightbend.lagom.javadsl.api.transport.TransportException;
-import com.lightbend.lagom.javadsl.broker.TopicProducer;
+import com.lightbend.lagom.javadsl.microprofile.messaging.EventLog;
+import com.lightbend.lagom.javadsl.microprofile.messaging.EventLogConsumer;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRef;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRegistry;
+import com.lightbend.lagom.javadsl.server.cdi.LagomService;
+import com.lightbend.microprofile.reactive.messaging.kafka.Kafka;
+import com.lightbend.microprofile.reactive.messaging.kafka.KafkaProducerMessage;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.reactive.messaging.Message;
+import org.eclipse.microprofile.reactive.messaging.Outgoing;
+import org.eclipse.microprofile.reactive.streams.ProcessorBuilder;
+import org.eclipse.microprofile.reactive.streams.ReactiveStreams;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -32,7 +37,8 @@ import java.util.concurrent.CompletionStage;
 
 import static com.example.auction.security.ServerSecurity.*;
 
-@Singleton
+@ApplicationScoped
+@LagomService
 public class ItemServiceImpl implements ItemService {
 
     private static final Integer DEFAULT_PAGE_SIZE = 10;
@@ -41,31 +47,22 @@ public class ItemServiceImpl implements ItemService {
     private final ItemRepository items;
 
     @Inject
-    public ItemServiceImpl(PersistentEntityRegistry registry, BiddingService biddingService, ItemRepository items) {
+    public ItemServiceImpl(PersistentEntityRegistry registry, ItemRepository items) {
         this.registry = registry;
         this.items = items;
-
-        registry.register(PItemEntity.class);
-
-        biddingService.bidEvents().subscribe().atLeastOnce(Flow.<BidEvent>create().mapAsync(1, this::handleBidEvent));
     }
 
-    /**
-     * TODO: doc this.
-     *
-     * @param event
-     * @return
-     */
-    private CompletionStage<Done> handleBidEvent(BidEvent event) {
+    @Incoming(provider = Kafka.class, topic = "bidding-BidEvent")
+    public CompletionStage<?> handleBidEvent(BidEvent event) {
         if (event instanceof BidEvent.BidPlaced) {
             BidEvent.BidPlaced bidPlaced = (BidEvent.BidPlaced) event;
             return entityRef(bidPlaced.getItemId())
-                    .ask(new PItemCommand.UpdatePrice(bidPlaced.getBid().getPrice()));
+                .ask(new PItemCommand.UpdatePrice(bidPlaced.getBid().getPrice()));
         } else if (event instanceof BidEvent.BiddingFinished) {
             BidEvent.BiddingFinished biddingFinished = (BidEvent.BiddingFinished) event;
             PItemCommand.FinishAuction finishAuction = new PItemCommand.FinishAuction(
-                    biddingFinished.getWinningBid().map(Bid::getBidder),
-                    biddingFinished.getWinningBid().map(Bid::getPrice).orElse(0));
+                biddingFinished.getWinningBid().map(Bid::getBidder),
+                biddingFinished.getWinningBid().map(Bid::getPrice).orElse(0));
             return entityRef(biddingFinished.getItemId()).ask(finishAuction);
         } else {
             // Ignore.
@@ -83,8 +80,8 @@ public class ItemServiceImpl implements ItemService {
             // TODO: remove this PItem from here and pass the 3 values in the command?
             PItem pItem = new PItem(itemId, userId, details);
             return entityRef(itemId)
-                    .ask(new CreateItem(pItem))
-                    .thenApply(done -> Mappers.toApi(pItem));
+                .ask(new CreateItem(pItem))
+                .thenApply(done -> Mappers.toApi(pItem));
         });
     }
 
@@ -95,28 +92,28 @@ public class ItemServiceImpl implements ItemService {
             PItemData details = Mappers.fromApi(item);
             PItemCommand.UpdateItem updateItem = new UpdateItem(userId, details);
             return entityRef(itemId)
-                    .ask(updateItem)
-                    .handle((pitem, updateException) -> {
-                                if (updateException != null) {
-                                    if (updateException.equals(UpdateFailureException.CANT_EDIT_ITEM_OF_ANOTHER_USER)) {
-                                        // don't disclose cause of error.
-                                        throw new Forbidden("UpdateFailed");
-                                    } else {
-                                        throw new TransportException(TransportErrorCode.fromHttp(409),
-                                                new ExceptionMessage("UpdateFailed", updateException.getMessage()));
-                                    }
-                                } else {
-                                    return Mappers.toApi((PItem) pitem);
-                                }
+                .ask(updateItem)
+                .handle((pitem, updateException) -> {
+                        if (updateException != null) {
+                            if (updateException.equals(UpdateFailureException.CANT_EDIT_ITEM_OF_ANOTHER_USER)) {
+                                // don't disclose cause of error.
+                                throw new Forbidden("UpdateFailed");
+                            } else {
+                                throw new TransportException(TransportErrorCode.fromHttp(409),
+                                    new ExceptionMessage("UpdateFailed", updateException.getMessage()));
                             }
-                    );
+                        } else {
+                            return Mappers.toApi((PItem) pitem);
+                        }
+                    }
+                );
         });
     }
 
     @Override
     public ServiceCall<NotUsed, Done> startAuction(UUID id) {
         return authenticated(userId -> req ->
-                entityRef(id).ask(new PItemCommand.StartAuction(userId))
+            entityRef(id).ask(new PItemCommand.StartAuction(userId))
         );
     }
 
@@ -133,48 +130,51 @@ public class ItemServiceImpl implements ItemService {
 
     @Override
     public ServiceCall<NotUsed, PaginatedSequence<ItemSummary>> getItemsForUser(
-            UUID id, ItemStatus status, Optional<Integer> pageNo, Optional<Integer> pageSize) {
+        UUID id, ItemStatus status, Optional<Integer> pageNo, Optional<Integer> pageSize) {
         return req -> items.getItemsForUser(id, status, pageNo.orElse(0), pageSize.orElse(DEFAULT_PAGE_SIZE));
     }
 
     // --------------------------------------------------------------------------------
-    @Override
-    public Topic<ItemEvent> itemEvents() {
-        return TopicProducer.taggedStreamWithOffset(PItemEvent.TAG.allTags(),
-                (tag, offset) -> registry.eventStream(tag, offset)
-                        .filter(p -> p.first().isPublic())
-                        .mapAsync(1, eventAndOffset ->
-                                convertEvent(eventAndOffset.first()).thenApply(event ->
-                                        Pair.create(event, eventAndOffset.second()))));
+    @Incoming(provider = EventLog.class)
+    @EventLogConsumer(numShards = 4)
+    @Outgoing(provider = Kafka.class, topic = "item-ItemEvent")
+    public ProcessorBuilder<Message<PItemEvent>, KafkaProducerMessage<String, ItemEvent>> publishEventLog() {
+        return ReactiveStreams.<Message<PItemEvent>>builder()
+            .filter(p -> p.getPayload().isPublic())
+            .flatMapCompletionStage(msg ->
+                convertEvent(msg.getPayload()).thenApply(event ->
+                    new KafkaProducerMessage<>(event.getItemId().toString(), event, msg::ack)
+                )
+            );
     }
 
     private CompletionStage<ItemEvent> convertEvent(PItemEvent event) {
         if (event instanceof PItemEvent.AuctionStarted) {
             return entityRef(event.getItemId())
-                    .ask(PItemCommand.GetItem.INSTANCE)
-                    .thenApply(maybeItem -> {
-                        PItem item = maybeItem.get();
-                        return new ItemEvent.AuctionStarted(item.getId(), item.getCreator(), item.getItemData().getReservePrice(),
-                                item.getItemData().getIncrement(), item.getAuctionStart().get(), item.getAuctionEnd().get());
-                    });
+                .ask(PItemCommand.GetItem.INSTANCE)
+                .thenApply(maybeItem -> {
+                    PItem item = maybeItem.get();
+                    return new ItemEvent.AuctionStarted(item.getId(), item.getCreator(), item.getItemData().getReservePrice(),
+                        item.getItemData().getIncrement(), item.getAuctionStart().get(), item.getAuctionEnd().get());
+                });
         } else if (event instanceof PItemEvent.AuctionFinished) {
             return entityRef(event.getItemId())
-                    .ask(PItemCommand.GetItem.INSTANCE)
-                    .thenApply(maybeItem -> {
-                        Item item = Mappers.toApi(maybeItem.get());
-                        return new ItemEvent.AuctionFinished(event.getItemId(), item);
-                    });
+                .ask(PItemCommand.GetItem.INSTANCE)
+                .thenApply(maybeItem -> {
+                    Item item = Mappers.toApi(maybeItem.get());
+                    return new ItemEvent.AuctionFinished(event.getItemId(), item);
+                });
         } else if (event instanceof PItemEvent.ItemCreated) {
             PItem item = ((PItemEvent.ItemCreated) event).getItem();
             return CompletableFuture.completedFuture(
-                    new ItemEvent.ItemUpdated(item.getId(), item.getCreator(), item.getItemData().getTitle(),
-                            item.getItemData().getDescription(), ItemStatus.CREATED, item.getItemData().getCurrencyId()));
+                new ItemEvent.ItemUpdated(item.getId(), item.getCreator(), item.getItemData().getTitle(),
+                    item.getItemData().getDescription(), ItemStatus.CREATED, item.getItemData().getCurrencyId()));
         } else if (event instanceof PItemEvent.ItemUpdated) {
             PItemEvent.ItemUpdated evt = (PItemEvent.ItemUpdated) event;
             PItemData itemDetails = evt.getItemDetails();
             return CompletableFuture.completedFuture(
-                    new ItemEvent.ItemUpdated(evt.getItemId(), evt.getCreator(), itemDetails.getTitle(),
-                            itemDetails.getDescription(), evt.getItemStatus().toItemStatus(), itemDetails.getCurrencyId()));
+                new ItemEvent.ItemUpdated(evt.getItemId(), evt.getCreator(), itemDetails.getTitle(),
+                    itemDetails.getDescription(), evt.getItemStatus().toItemStatus(), itemDetails.getCurrencyId()));
         } else {
             throw new IllegalArgumentException("Converting non public event");
         }

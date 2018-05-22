@@ -4,12 +4,14 @@ import com.example.auction.user.impl.PUserCommand.CreatePUser;
 import com.example.auction.user.impl.PUserCommand.GetPUser;
 import com.example.auction.user.impl.PUserEvent.PUserCreated;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntity;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 
+@PersistenceScoped
 public class PUserEntity extends PersistentEntity<PUserCommand, PUserEvent, Optional<PUser>> {
 
     @Override

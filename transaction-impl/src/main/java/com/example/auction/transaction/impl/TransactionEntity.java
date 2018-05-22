@@ -6,10 +6,12 @@ import com.example.auction.transaction.impl.TransactionEvent.*;
 import com.lightbend.lagom.javadsl.api.transport.Forbidden;
 import com.lightbend.lagom.javadsl.api.transport.NotFound;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntity;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 
 import java.util.Optional;
 import java.util.UUID;
 
+@PersistenceScoped
 public class TransactionEntity extends PersistentEntity<TransactionCommand, TransactionEvent, TransactionState> {
 
     @Override

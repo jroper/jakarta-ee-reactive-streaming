@@ -7,15 +7,15 @@ import com.example.auction.item.api.ItemStatus;
 import com.example.auction.item.api.ItemSummary;
 import com.example.auction.pagination.PaginatedSequence;
 import com.lightbend.lagom.javadsl.persistence.AggregateEventTag;
-import com.lightbend.lagom.javadsl.persistence.ReadSide;
 import com.lightbend.lagom.javadsl.persistence.ReadSideProcessor;
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide;
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraSession;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 import org.pcollections.PSequence;
 import org.pcollections.TreePVector;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -27,15 +27,14 @@ import java.util.stream.Collectors;
 import static com.example.core.CompletionStageUtils.*;
 import static com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide.completedStatements;
 
-@Singleton
+@ApplicationScoped
 public class ItemRepository {
 
     private final CassandraSession session;
 
     @Inject
-    public ItemRepository(CassandraSession session, ReadSide readSide) {
+    public ItemRepository(CassandraSession session) {
         this.session = session;
-        readSide.register(PItemEventProcessor.class);
     }
 
     CompletionStage<PaginatedSequence<ItemSummary>> getItemsForUser(
@@ -96,7 +95,8 @@ public class ItemRepository {
         );
     }
 
-    private static class PItemEventProcessor extends ReadSideProcessor<PItemEvent> {
+    @PersistenceScoped
+    public static class PItemEventProcessor extends ReadSideProcessor<PItemEvent> {
 
         private final CassandraSession session;
         private final CassandraReadSide readSide;

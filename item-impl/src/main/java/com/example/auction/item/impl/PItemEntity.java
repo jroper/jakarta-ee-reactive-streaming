@@ -7,6 +7,7 @@ import com.lightbend.lagom.javadsl.persistence.PersistentEntity;
 
 import com.example.auction.item.impl.PItemCommand.*;
 import com.example.auction.item.impl.PItemEvent.*;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -15,6 +16,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+@PersistenceScoped
 public class PItemEntity extends PersistentEntity<PItemCommand, PItemEvent, PItemState> {
     @Override
     public Behavior initialBehavior(Optional<PItemState> snapshotState) {

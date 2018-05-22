@@ -11,9 +11,11 @@ import com.lightbend.lagom.javadsl.persistence.ReadSide;
 import com.lightbend.lagom.javadsl.persistence.ReadSideProcessor;
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide;
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraSession;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 import org.pcollections.PSequence;
 import org.pcollections.TreePVector;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.Arrays;
@@ -28,15 +30,14 @@ import static com.example.core.CompletionStageUtils.accept;
 import static com.example.core.CompletionStageUtils.doAll;
 import static com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide.completedStatements;
 
-@Singleton
+@ApplicationScoped
 public class TransactionRepository {
 
     private final CassandraSession session;
 
     @Inject
-    public TransactionRepository(CassandraSession session, ReadSide readSide) {
+    public TransactionRepository(CassandraSession session) {
         this.session = session;
-        readSide.register(TransactionEventProcessor.class);
     }
 
     CompletionStage<PaginatedSequence<TransactionSummary>> getTransactionsForUser(
@@ -97,7 +98,8 @@ public class TransactionRepository {
         );
     }
 
-    private static class TransactionEventProcessor extends ReadSideProcessor<TransactionEvent> {
+    @PersistenceScoped
+    public static class TransactionEventProcessor extends ReadSideProcessor<TransactionEvent> {
         private final CassandraSession session;
         private final CassandraReadSide readSide;
 

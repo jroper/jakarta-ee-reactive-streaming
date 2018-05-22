@@ -1,6 +1,5 @@
 package com.example.auction.user.impl;
 
-import akka.Done;
 import akka.NotUsed;
 import com.example.auction.pagination.PaginatedSequence;
 import com.example.auction.user.api.User;
@@ -11,11 +10,15 @@ import com.lightbend.lagom.javadsl.api.ServiceCall;
 import com.lightbend.lagom.javadsl.api.transport.NotFound;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRef;
 import com.lightbend.lagom.javadsl.persistence.PersistentEntityRegistry;
+import com.lightbend.lagom.javadsl.server.cdi.LagomService;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
 import java.util.Optional;
 import java.util.UUID;
 
+@LagomService
+@ApplicationScoped
 public class UserServiceImpl implements UserService {
 
     private final PersistentEntityRegistry registry;
@@ -26,7 +29,6 @@ public class UserServiceImpl implements UserService {
     public UserServiceImpl(PersistentEntityRegistry registry, UserRepository userRepository) {
         this.registry = registry;
         this.userRepository = userRepository;
-        registry.register(PUserEntity.class);
     }
 
 

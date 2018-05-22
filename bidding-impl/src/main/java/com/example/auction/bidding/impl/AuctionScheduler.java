@@ -10,8 +10,11 @@ import com.lightbend.lagom.javadsl.persistence.PersistentEntityRegistry;
 import com.lightbend.lagom.javadsl.persistence.ReadSide;
 import com.lightbend.lagom.javadsl.persistence.ReadSideProcessor;
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide;
+
 import static com.lightbend.lagom.javadsl.persistence.cassandra.CassandraReadSide.*;
+
 import com.lightbend.lagom.javadsl.persistence.cassandra.CassandraSession;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 import org.pcollections.PSequence;
 import com.example.auction.bidding.impl.AuctionEvent.*;
 import com.example.auction.bidding.impl.AuctionCommand.FinishBidding;
@@ -20,8 +23,10 @@ import org.slf4j.LoggerFactory;
 import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
 
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.context.Initialized;
+import javax.enterprise.event.Observes;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -31,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Maintains a read side view of all auctions that gets used to schedule FinishBidding events.
  */
-@Singleton
+@ApplicationScoped
 public class AuctionScheduler {
 
     private static final Logger log = LoggerFactory.getLogger(AuctionScheduler.class);
@@ -49,13 +54,13 @@ public class AuctionScheduler {
         this.registry = registry;
         this.materializer = materializer;
         finishBiddingDelay = Duration.create(
-                this.system.settings().config().getDuration("auctionSchedulerDelay", TimeUnit.MILLISECONDS),
-                TimeUnit.MILLISECONDS);
+            this.system.settings().config().getDuration("auctionSchedulerDelay", TimeUnit.MILLISECONDS),
+            TimeUnit.MILLISECONDS);
+    }
 
-        readSide.register(AuctionSchedulerProcessor.class);
-
+    public void startScheduler(@Observes @Initialized(ApplicationScoped.class) Object obj) {
         system.scheduler().schedule(finishBiddingDelay, finishBiddingDelay,
-                this::checkFinishBidding, system.dispatcher());
+            this::checkFinishBidding, system.dispatcher());
     }
 
     /**
@@ -64,11 +69,11 @@ public class AuctionScheduler {
     private void checkFinishBidding() {
         try {
             session.select("SELECT itemId FROM auctionSchedule WHERE endAuction < toTimestamp(now()) allow filtering")
-                    .runForeach(row -> {
-                        UUID uuid = row.getUUID("itemId");
-                        registry.refFor(AuctionEntity.class, uuid.toString())
-                                .ask(FinishBidding.INSTANCE);
-                    }, materializer).exceptionally(t -> {
+                .runForeach(row -> {
+                    UUID uuid = row.getUUID("itemId");
+                    registry.refFor(AuctionEntity.class, uuid.toString())
+                        .ask(FinishBidding.INSTANCE);
+                }, materializer).exceptionally(t -> {
                 log.warn("Error running finish bidding query", t);
                 return Done.getInstance();
             });
@@ -78,7 +83,7 @@ public class AuctionScheduler {
         }
     }
 
-
+    @PersistenceScoped
     public static class AuctionSchedulerProcessor extends ReadSideProcessor<AuctionEvent> {
 
         private final CassandraReadSide readSide;
@@ -96,27 +101,27 @@ public class AuctionScheduler {
         @Override
         public ReadSideHandler<AuctionEvent> buildHandler() {
             return readSide.<AuctionEvent>builder("auctionSchedulerOffset")
-                    .setGlobalPrepare(this::createTable)
-                    .setPrepare(tag ->
-                        prepareInsertAuctionStatement()
-                                .thenCompose(d -> prepareDeleteAuctionStatement())
-                    )
-                    .setEventHandler(AuctionStarted.class, this::insertAuction)
-                    .setEventHandler(BiddingFinished.class, e -> deleteAuction(e.getItemId()))
-                    .setEventHandler(AuctionCancelled.class, e -> deleteAuction(e.getItemId()))
-                    .build();
+                .setGlobalPrepare(this::createTable)
+                .setPrepare(tag ->
+                    prepareInsertAuctionStatement()
+                        .thenCompose(d -> prepareDeleteAuctionStatement())
+                )
+                .setEventHandler(AuctionStarted.class, this::insertAuction)
+                .setEventHandler(BiddingFinished.class, e -> deleteAuction(e.getItemId()))
+                .setEventHandler(AuctionCancelled.class, e -> deleteAuction(e.getItemId()))
+                .build();
         }
 
         private CompletionStage<Done> createTable() {
             return session.executeCreateTable(
-                    "CREATE TABLE IF NOT EXISTS auctionSchedule ( " +
-                            "itemId uuid, " +
-                            "endAuction timestamp, " +
-                            "PRIMARY KEY (itemId)" +
+                "CREATE TABLE IF NOT EXISTS auctionSchedule ( " +
+                    "itemId uuid, " +
+                    "endAuction timestamp, " +
+                    "PRIMARY KEY (itemId)" +
                     ")").thenCompose(d ->
                 session.executeCreateTable(
-                        "CREATE INDEX IF NOT EXISTS auctionScheduleIndex " +
-                                "on auctionSchedule (endAuction)"
+                    "CREATE INDEX IF NOT EXISTS auctionScheduleIndex " +
+                        "on auctionSchedule (endAuction)"
                 )
             );
 
@@ -124,24 +129,24 @@ public class AuctionScheduler {
 
         private CompletionStage<Done> prepareInsertAuctionStatement() {
             return session.prepare("INSERT INTO auctionSchedule(itemId, endAuction) VALUES (?, ?)")
-                    .thenApply(s -> {
-                        insertAuctionStatement = s;
-                        return Done.getInstance();
-                    });
+                .thenApply(s -> {
+                    insertAuctionStatement = s;
+                    return Done.getInstance();
+                });
         }
 
         private CompletionStage<Done> prepareDeleteAuctionStatement() {
             return session.prepare("DELETE FROM auctionSchedule where itemId = ?")
-                    .thenApply(s -> {
-                        deleteAuctionStatement = s;
-                        return Done.getInstance();
-                    });
+                .thenApply(s -> {
+                    deleteAuctionStatement = s;
+                    return Done.getInstance();
+                });
         }
 
         private CompletionStage<List<BoundStatement>> insertAuction(AuctionStarted started) {
             return completedStatement(insertAuctionStatement.bind(
-                    started.getItemId(),
-                    Date.from(started.getAuction().getEndTime())
+                started.getItemId(),
+                Date.from(started.getAuction().getEndTime())
             ));
         }
 

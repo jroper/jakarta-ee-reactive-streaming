@@ -10,10 +10,12 @@ import java.util.UUID;
 
 import com.example.auction.bidding.impl.AuctionCommand.*;
 import com.example.auction.bidding.impl.AuctionEvent.*;
+import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 
 /**
  * The auction persistent entity.
  */
+@PersistenceScoped
 public class AuctionEntity extends PersistentEntity<AuctionCommand, AuctionEvent, AuctionState> {
 
     @Override

@@ -1,29 +1,36 @@
 package com.example.auction.search.impl;
 
-import akka.stream.javadsl.Flow;
+import akka.Done;
 import com.example.auction.bidding.api.BidEvent;
-import com.example.auction.bidding.api.BiddingService;
 import com.example.auction.item.api.ItemEvent;
-import com.example.auction.item.api.ItemService;
 import com.example.auction.search.IndexedStore;
 import com.example.elasticsearch.IndexedItem;
-import com.lightbend.lagom.javadsl.api.broker.Topic;
+import org.eclipse.microprofile.reactive.messaging.Incoming;
 
+import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
-@Singleton
+@ApplicationScoped
 public class BrokerEventConsumer {
 
-    @Inject
-    public BrokerEventConsumer(IndexedStore indexedStore, ItemService itemService, BiddingService biddingService) {
+    private final IndexedStore indexedStore;
 
-        // TODO: use ES' _bulk API
-        Topic<ItemEvent> itemEventTopic = itemService.itemEvents();
-        Topic<BidEvent> bidEventTopic = biddingService.bidEvents();
-        itemEventTopic.subscribe().atLeastOnce(Flow.<ItemEvent>create().map(this::toDocument).mapAsync(1, indexedStore::store));
-        bidEventTopic.subscribe().atLeastOnce(Flow.<BidEvent>create().map(this::toDocument).mapAsync(1, indexedStore::store));
+    @Inject
+    public BrokerEventConsumer(IndexedStore indexedStore) {
+        this.indexedStore = indexedStore;
+    }
+
+    @Incoming(topic = "item-ItemEvent")
+    public CompletionStage<?> consumeItemEvents(ItemEvent event) {
+        return toDocument(event).map(indexedStore::store).orElse(CompletableFuture.completedFuture(Done.getInstance()));
+    }
+
+    @Incoming(topic = "bidding-BidEvent")
+    public CompletionStage<?> consumeBidEvents(BidEvent event) {
+        return toDocument(event).map(indexedStore::store).orElse(CompletableFuture.completedFuture(Done.getInstance()));
     }
 
     private Optional<IndexedItem> toDocument(ItemEvent event) {
@@ -36,12 +43,12 @@ public class BrokerEventConsumer {
         } else if (event instanceof ItemEvent.ItemUpdated) {
             ItemEvent.ItemUpdated details = (ItemEvent.ItemUpdated) event;
             return Optional.of(IndexedItem.forItemDetails(
-                    details.getItemId(),
-                    details.getCreator(),
-                    details.getTitle(),
-                    details.getDescription(),
-                    details.getItemStatus(),
-                    details.getCurrencyId()));
+                details.getItemId(),
+                details.getCreator(),
+                details.getTitle(),
+                details.getDescription(),
+                details.getItemStatus(),
+                details.getCurrencyId()));
         } else {
             return Optional.empty();
         }
@@ -54,8 +61,8 @@ public class BrokerEventConsumer {
         } else if (event instanceof BidEvent.BiddingFinished) {
             BidEvent.BiddingFinished bid = (BidEvent.BiddingFinished) event;
             return Optional.of(bid.getWinningBid()
-                    .map(winning -> IndexedItem.forWinningBid(bid.getItemId(), winning.getPrice(), winning.getBidder()))
-                    .orElse(IndexedItem.forPrice(bid.getItemId(), 0)));
+                .map(winning -> IndexedItem.forWinningBid(bid.getItemId(), winning.getPrice(), winning.getBidder()))
+                .orElse(IndexedItem.forPrice(bid.getItemId(), 0)));
         } else {
             return Optional.empty();
         }
