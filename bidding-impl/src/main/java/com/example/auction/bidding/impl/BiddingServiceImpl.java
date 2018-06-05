@@ -91,17 +91,21 @@ public class BiddingServiceImpl implements BiddingService {
     @EventLogConsumer(numShards = 4)
     @Outgoing(provider = Kafka.class, topic = "bidding-BidEvent")
     public ProcessorBuilder<Message<AuctionEvent>, KafkaProducerMessage<String, BidEvent>> publishEventLog() {
+
         return ReactiveStreams.<Message<AuctionEvent>>builder()
             .filter(msg ->
                 msg.getPayload() instanceof AuctionEvent.BidPlaced ||
                         msg.getPayload() instanceof AuctionEvent.BiddingFinished
+
         ).flatMapCompletionStage(event -> {
+
             if (event.getPayload() instanceof AuctionEvent.BidPlaced) {
                 AuctionEvent.BidPlaced bid = (AuctionEvent.BidPlaced) event.getPayload();
                 return CompletableFuture.completedFuture(
                     new KafkaProducerMessage<>(bid.getItemId().toString(),
                         new BidEvent.BidPlaced(bid.getItemId(), convertBid(bid.getBid())), event::ack)
                 );
+
             } else {
                 UUID itemId = ((AuctionEvent.BiddingFinished) event.getPayload()).getItemId();
                 return getBiddingFinish(itemId).thenApply(bf ->

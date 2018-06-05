@@ -260,6 +260,5 @@ lagomCassandraCleanOnStart in ThisBuild := false
 lagomUnmanagedServices in ThisBuild += ("elastic-search" -> "http://127.0.0.1:9200")
 
 resolvers in ThisBuild ++= Seq(
-  Resolver.mavenLocal,
   Resolver.bintrayRepo("jroper", "maven")
 )
