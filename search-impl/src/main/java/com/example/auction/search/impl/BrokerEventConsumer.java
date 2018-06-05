@@ -25,12 +25,20 @@ public class BrokerEventConsumer {
 
     @Incoming(topic = "item-ItemEvent")
     public CompletionStage<?> consumeItemEvents(ItemEvent event) {
-        return toDocument(event).map(indexedStore::store).orElse(CompletableFuture.completedFuture(Done.getInstance()));
+        Optional<IndexedItem> maybeDocument = toDocument(event);
+
+        Optional<CompletionStage<Done>> maybeDone = maybeDocument.map(indexedStore::store);
+
+        return maybeDone.orElse(CompletableFuture.completedFuture(Done.getInstance()));
     }
 
     @Incoming(topic = "bidding-BidEvent")
     public CompletionStage<?> consumeBidEvents(BidEvent event) {
-        return toDocument(event).map(indexedStore::store).orElse(CompletableFuture.completedFuture(Done.getInstance()));
+        Optional<IndexedItem> maybeDocument = toDocument(event);
+
+        Optional<CompletionStage<Done>> maybeDone = maybeDocument.map(indexedStore::store);
+
+        return maybeDone.orElse(CompletableFuture.completedFuture(Done.getInstance()));
     }
 
     private Optional<IndexedItem> toDocument(ItemEvent event) {

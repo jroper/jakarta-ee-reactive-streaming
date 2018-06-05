@@ -18,6 +18,7 @@ import com.lightbend.lagom.javadsl.persistence.cdi.PersistenceScoped;
 import org.pcollections.PSequence;
 import com.example.auction.bidding.impl.AuctionEvent.*;
 import com.example.auction.bidding.impl.AuctionCommand.FinishBidding;
+import org.pcollections.TreePVector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.concurrent.duration.Duration;
@@ -156,7 +157,7 @@ public class AuctionScheduler {
 
         @Override
         public PSequence<AggregateEventTag<AuctionEvent>> aggregateTags() {
-            return AuctionEvent.TAG.allTags();
+            return TreePVector.singleton(AuctionEvent.TAG);
         }
     }
 }

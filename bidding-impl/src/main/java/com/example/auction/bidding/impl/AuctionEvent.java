@@ -15,8 +15,7 @@ import java.util.UUID;
  */
 public interface AuctionEvent extends Jsonable, AggregateEvent<AuctionEvent> {
 
-    int NUM_SHARDS = 4;
-    AggregateEventShards<AuctionEvent> TAG = AggregateEventTag.sharded(AuctionEvent.class, NUM_SHARDS);
+    AggregateEventTag<AuctionEvent> TAG = AggregateEventTag.of(AuctionEvent.class);
 
     @Override
     default AggregateEventTagger<AuctionEvent> aggregateTag() {

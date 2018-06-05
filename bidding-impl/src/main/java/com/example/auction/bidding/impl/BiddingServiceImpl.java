@@ -69,9 +69,9 @@ public class BiddingServiceImpl implements BiddingService {
         return authenticated(userId -> bid -> {
             AuctionCommand.PlaceBid placeBid = new AuctionCommand.PlaceBid(bid.getMaximumBidPrice(), userId);
             return entityRef(itemId).ask(placeBid).thenApply(result ->
-                        new BidResult(result.getCurrentPrice(),
-                                result.getStatus().bidResultStatus, result.getCurrentBidder())
-                    );
+                new BidResult(result.getCurrentPrice(),
+                    result.getStatus().bidResultStatus, result.getCurrentBidder())
+            );
         });
     }
 
@@ -80,47 +80,51 @@ public class BiddingServiceImpl implements BiddingService {
         return request -> {
             return entityRef(itemId).ask(GetAuction.INSTANCE).thenApply(auction -> {
                 List<Bid> bids = auction.getBiddingHistory().stream()
-                        .map(this::convertBid)
-                        .collect(Collectors.toList());
+                    .map(this::convertBid)
+                    .collect(Collectors.toList());
                 return TreePVector.from(bids);
             });
         };
     }
 
-    @Incoming(provider = EventLog.class)
-    @EventLogConsumer(numShards = 4)
-    @Outgoing(provider = Kafka.class, topic = "bidding-BidEvent")
+
     public ProcessorBuilder<Message<AuctionEvent>, KafkaProducerMessage<String, BidEvent>> publishEventLog() {
 
         return ReactiveStreams.<Message<AuctionEvent>>builder()
+            // Filter the event log events because we only want to publish
+            // bid placed and bidding finished events
             .filter(msg ->
-                msg.getPayload() instanceof AuctionEvent.BidPlaced ||
+                    msg.getPayload() instanceof AuctionEvent.BidPlaced ||
                         msg.getPayload() instanceof AuctionEvent.BiddingFinished
 
-        ).flatMapCompletionStage(event -> {
+            // Map the events to our public event API
+            ).flatMapCompletionStage(event -> {
 
-            if (event.getPayload() instanceof AuctionEvent.BidPlaced) {
-                AuctionEvent.BidPlaced bid = (AuctionEvent.BidPlaced) event.getPayload();
-                return CompletableFuture.completedFuture(
-                    new KafkaProducerMessage<>(bid.getItemId().toString(),
-                        new BidEvent.BidPlaced(bid.getItemId(), convertBid(bid.getBid())), event::ack)
-                );
+                if (event.getPayload() instanceof AuctionEvent.BidPlaced) {
+                    // Bid placed events get converted to a simple BidPlaced event
+                    AuctionEvent.BidPlaced bid = (AuctionEvent.BidPlaced) event.getPayload();
+                    return CompletableFuture.completedFuture(
+                        new KafkaProducerMessage<>(bid.getItemId().toString(),
+                            new BidEvent.BidPlaced(bid.getItemId(), convertBid(bid.getBid())), event::ack)
+                    );
 
-            } else {
-                UUID itemId = ((AuctionEvent.BiddingFinished) event.getPayload()).getItemId();
-                return getBiddingFinish(itemId).thenApply(bf ->
-                    new KafkaProducerMessage<>(bf.getItemId().toString(), bf, event::ack)
-                );
-            }
-        });
+                } else {
+                    // Bidding finished events require us to look up further information
+                    // in order to publish the public events
+                    UUID itemId = ((AuctionEvent.BiddingFinished) event.getPayload()).getItemId();
+                    return getBiddingFinish(itemId).thenApply(bf ->
+                        new KafkaProducerMessage<>(bf.getItemId().toString(), bf, event::ack)
+                    );
+                }
+            });
     }
 
     private CompletionStage<BidEvent.BiddingFinished> getBiddingFinish(UUID itemId) {
         return entityRef(itemId).ask(GetAuction.INSTANCE).thenApply(auction -> {
             Optional<Bid> winningBid = auction.lastBid()
-                    .filter(bid ->
-                            bid.getBidPrice() >= auction.getAuction().get().getReservePrice()
-                    ).map(this::convertBid);
+                .filter(bid ->
+                    bid.getBidPrice() >= auction.getAuction().get().getReservePrice()
+                ).map(this::convertBid);
             return new BidEvent.BiddingFinished(itemId, winningBid);
         });
     }
