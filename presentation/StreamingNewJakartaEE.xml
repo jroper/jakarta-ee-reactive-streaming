@@ -1,0 +1,12 @@
+<templateSet group="StreamingNewJakartaEE">
+  <template name="in" value="@Incoming(provider = EventLog.class)&#10;" description="" toReformat="false" toShortenFQNames="true" deactivated="true">
+    <context>
+      <option name="JAVA_CODE" value="true" />
+    </context>
+  </template>
+  <template name="out" value="@Outgoing(provider = Kafka.class, topic = &quot;bidding-BidEvent&quot;)" description="" toReformat="false" toShortenFQNames="true" deactivated="true">
+    <context>
+      <option name="JAVA_CODE" value="true" />
+    </context>
+  </template>
+</templateSet>
