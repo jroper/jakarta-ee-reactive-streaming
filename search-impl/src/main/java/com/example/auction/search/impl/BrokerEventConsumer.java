@@ -42,6 +42,13 @@ public class BrokerEventConsumer {
     public SubscriberBuilder<Message<BidEvent>, ?> consumeBidEvents() {
 
         return ReactiveStreams.<Message<BidEvent>>builder()
+            .map(this::bidEventToDocument)
+            .filter(Optional::isPresent)
+            .map(Optional::get)
+            .flatMapCompletionStage( message ->
+                indexedStore.store(message.getPayload()).thenApply(done -> message)
+            )
+            .flatMapCompletionStage(Message::ack)
             .forEach(done -> {});
 
     }

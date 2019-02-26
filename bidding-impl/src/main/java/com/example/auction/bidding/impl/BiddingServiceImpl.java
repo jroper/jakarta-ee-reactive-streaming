@@ -87,8 +87,11 @@ public class BiddingServiceImpl implements BiddingService {
         };
     }
 
+    @Incoming(provider = EventLog.class)
+    @Outgoing(provider = Kafka.class, value = "bidding-BidEvent")
     public ProcessorBuilder<Message<AuctionEvent>, KafkaProducerMessage<String, BidEvent>> publishEventLog() {
 
+        
         return ReactiveStreams.<Message<AuctionEvent>>builder()
             // Filter the event log events because we only want to publish
             // bid placed and bidding finished events
