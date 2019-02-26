@@ -63,7 +63,7 @@ lazy val itemImpl = (project in file("item-impl"))
       lagomPersistenceReactiveMessaging,
       lagomReactiveMessaging,
       cassandraExtras
-    )
+    ) ++ akkaDeps
   )
   .settings(lagomForkedTestSettings: _*)
   .dependsOn(
@@ -97,7 +97,7 @@ lazy val biddingImpl = (project in file("bidding-impl"))
       lagomCdiPersistence,
       lagomPersistenceReactiveMessaging,
       lagomReactiveMessaging
-    ),
+    ) ++ akkaDeps,
     maxErrors := 10000
 
   )
@@ -168,7 +168,7 @@ lazy val transactionImpl = (project in file("transaction-impl"))
     lagomPersistenceReactiveMessaging,
     lagomReactiveMessaging,
     cassandraExtras
-  )
+  ) ++ akkaDeps
 )
 
 lazy val userApi = (project in file("user-api"))
@@ -200,7 +200,7 @@ lazy val userImpl = (project in file("user-impl"))
       lagomReactiveMessaging,
       cassandraExtras,
       lombok
-    )
+    ) ++ akkaDeps
   )
 
 lazy val webGateway = (project in file("web-gateway"))
@@ -229,12 +229,25 @@ lazy val webGateway = (project in file("web-gateway"))
 
 val lombok = "org.projectlombok" % "lombok" % "1.16.10"
 val cassandraExtras = "com.datastax.cassandra" % "cassandra-driver-extras" % "3.0.0"
-val lagomMicroprofileVersion = "1.0.0-alpha-jroper-1"
+val lagomMicroprofileVersion = "1.0.0-alpha-jroper-2"
 val lagomCdi = "com.lightbend.lagom.microprofile" %% "lagom-cdi" % lagomMicroprofileVersion
 val lagomCdiServer = "com.lightbend.lagom.microprofile" %% "lagom-cdi-server" % lagomMicroprofileVersion
 val lagomCdiPersistence = "com.lightbend.lagom.microprofile" %% "lagom-cdi-persistence" % lagomMicroprofileVersion
 val lagomReactiveMessaging = "com.lightbend.lagom.microprofile" %% "lagom-reactive-messaging" % lagomMicroprofileVersion
 val lagomPersistenceReactiveMessaging = "com.lightbend.lagom.microprofile" %% "lagom-persistence-messaging" % lagomMicroprofileVersion
+
+val akkaDeps = Seq(
+  "akka-actor",
+  "akka-cluster-sharding",
+  "akka-cluster-tools",
+  "akka-distributed-data",
+  "akka-persistence-query",
+  "akka-persistence",
+  "akka-protobuf",
+  "akka-remote",
+  "akka-slf4j",
+  "akka-stream"
+).map(id => "com.typesafe.akka" %% id % "2.5.19")
 
 def elasticsearch: String = {
   val enableElasticsearch = sys.props.getOrElse("enableElasticsearch", default = "false")

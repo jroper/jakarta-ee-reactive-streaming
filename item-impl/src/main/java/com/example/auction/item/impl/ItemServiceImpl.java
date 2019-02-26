@@ -25,8 +25,8 @@ import com.lightbend.microprofile.reactive.messaging.kafka.KafkaProducerMessage;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
-import org.eclipse.microprofile.reactive.streams.ProcessorBuilder;
-import org.eclipse.microprofile.reactive.streams.ReactiveStreams;
+import org.eclipse.microprofile.reactive.streams.operators.ProcessorBuilder;
+import org.eclipse.microprofile.reactive.streams.operators.ReactiveStreams;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.inject.Inject;
@@ -52,7 +52,7 @@ public class ItemServiceImpl implements ItemService {
         this.items = items;
     }
 
-    @Incoming(provider = Kafka.class, topic = "bidding-BidEvent")
+    @Incoming(provider = Kafka.class, value = "bidding-BidEvent")
     public CompletionStage<?> handleBidEvent(BidEvent event) {
         if (event instanceof BidEvent.BidPlaced) {
             BidEvent.BidPlaced bidPlaced = (BidEvent.BidPlaced) event;
@@ -137,7 +137,7 @@ public class ItemServiceImpl implements ItemService {
     // --------------------------------------------------------------------------------
     @Incoming(provider = EventLog.class)
     @EventLogConsumer(numShards = 4)
-    @Outgoing(provider = Kafka.class, topic = "item-ItemEvent")
+    @Outgoing(provider = Kafka.class, value = "item-ItemEvent")
     public ProcessorBuilder<Message<PItemEvent>, KafkaProducerMessage<String, ItemEvent>> publishEventLog() {
         return ReactiveStreams.<Message<PItemEvent>>builder()
             .filter(p -> p.getPayload().isPublic())

@@ -18,8 +18,8 @@ import com.lightbend.microprofile.reactive.messaging.kafka.KafkaProducerMessage;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.eclipse.microprofile.reactive.messaging.Outgoing;
-import org.eclipse.microprofile.reactive.streams.ProcessorBuilder;
-import org.eclipse.microprofile.reactive.streams.ReactiveStreams;
+import org.eclipse.microprofile.reactive.streams.operators.ProcessorBuilder;
+import org.eclipse.microprofile.reactive.streams.operators.ReactiveStreams;
 import org.pcollections.PSequence;
 import org.pcollections.TreePVector;
 
@@ -48,7 +48,7 @@ public class BiddingServiceImpl implements BiddingService {
         this.registry = registry;
     }
 
-    @Incoming(topic = "item-ItemEvent", provider = Kafka.class)
+    @Incoming(value = "item-ItemEvent", provider = Kafka.class)
     public CompletionStage<?> handleItemServiceEvents(ItemEvent itemEvent) {
         if (itemEvent instanceof ItemEvent.AuctionStarted) {
             ItemEvent.AuctionStarted auctionStarted = (ItemEvent.AuctionStarted) itemEvent;
@@ -86,7 +86,6 @@ public class BiddingServiceImpl implements BiddingService {
             });
         };
     }
-
 
     public ProcessorBuilder<Message<AuctionEvent>, KafkaProducerMessage<String, BidEvent>> publishEventLog() {
 
